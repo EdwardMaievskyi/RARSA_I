@@ -1,0 +1,33 @@
+version: '3.8'
+
+services:
+  research-agent:
+    build: .
+    container_name: ai-research-agent
+    ports:
+      - "127.0.0.1:7860:7860"
+    environment:
+      - GRADIO_HOST=0.0.0.0
+      - GRADIO_PORT=7860
+      - GRADIO_SHARE=false
+      - GRADIO_ANALYTICS_ENABLED=False
+      - GRADIO_TELEMETRY_ENABLED=False
+    volumes:
+      - ./.env:/app/.env:ro
+    restart: unless-stopped
+    networks:
+      - research-network
+    tmpfs:
+      - /tmp
+      - /app/.gradio  # Gradio temp directory
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
+      - 1.1.1.1
+
+networks:
+  research-network:
+    driver: bridge
+    internal: false  # Allow external connections
+    driver_opts:
+      com.docker.network.bridge.enable_ip_masquerade: "true" 
