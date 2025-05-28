@@ -8,8 +8,9 @@ import requests
 from bs4 import BeautifulSoup
 from config import OPENAI_API_KEY, PRIMARY_MODEL_NAME, TAVILY_API_KEY
 from openai import OpenAI
+import logging
 
-
+logger = logging.getLogger(__name__)
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
 
@@ -40,7 +41,7 @@ def wikipedia_search(query: str,
     Searches Wikipedia for the given query and returns a summary.
     Use this first for factual, encyclopedic queries.
     """
-    print(f"TOOL: Executing Wikipedia search for: '{query}'")
+    logger.info(f"TOOL: Executing Wikipedia search for: '{query}'")
     try:
         # Set a user-agent
         wikipedia.set_user_agent("MyResearchAgent/1.0 (myemail@example.com)")
@@ -51,6 +52,7 @@ def wikipedia_search(query: str,
                                     sentences=max_sentences,
                                     auto_suggest=False,
                                     redirect=True)
+        logger.debug(f"Wikipedia search successful for '{query}', page title: {page.title}")
         return [
             SearchResult(
                 title=page.title,
@@ -60,13 +62,13 @@ def wikipedia_search(query: str,
             )
         ]
     except wikipedia.exceptions.PageError:
-        print(f"  INFO: Wikipedia page for '{query}' not found.")
+        logger.info(f"Wikipedia page for '{query}' not found")
         return [SearchResult(title=f"Page for '{query}' not found",
                              url="",
                              snippet=f"Wikipedia does not have a page specifically titled '{query}'.",
                              source_name="Wikipedia")]
     except wikipedia.exceptions.DisambiguationError as e:
-        print(f"  INFO: Wikipedia search for '{query}' resulted in a disambiguation page. Options: {e.options[:3]}")
+        logger.info(f"Wikipedia search for '{query}' resulted in disambiguation. Options: {e.options[:3]}")
         if e.options:
             # Try searching for the first option as a fallback
             try:
@@ -78,6 +80,7 @@ def wikipedia_search(query: str,
                                             sentences=max_sentences,
                                             auto_suggest=False,
                                             redirect=True)
+                logger.debug(f"Wikipedia disambiguation fallback successful for '{first_option}'")
                 return [
                     SearchResult(
                         title=page.title,
@@ -87,7 +90,7 @@ def wikipedia_search(query: str,
                     )
                 ]
             except Exception as e_inner:
-                print(f"  ERROR in Wikipedia disambiguation fallback for '{first_option}': {e_inner}")
+                logger.error(f"Wikipedia disambiguation fallback failed for '{first_option}': {e_inner}")
                 return [SearchResult(title=f"Disambiguation error for '{query}'",
                                      url="",
                                      snippet=f"Wikipedia search for '{query}' led to a disambiguation page. Example options: {', '.join(e.options[:3]) if e.options else 'None'}.", source_name="Wikipedia")]
@@ -96,7 +99,7 @@ def wikipedia_search(query: str,
                              snippet=f"Wikipedia search for '{query}' led to a disambiguation page.",
                              source_name="Wikipedia")]
     except Exception as e:
-        print(f"  ERROR in Wikipedia search: {e}")
+        logger.error(f"Wikipedia search failed: {e}", exc_info=True)
         return []
 
 
@@ -107,12 +110,14 @@ def duckduckgo_search(query: str,
     Use this for general web searches if Wikipedia is not sufficient or appropriate.
     It's fast and provides a good starting point for research.
     """
-    print(f"TOOL: Executing DuckDuckGo search for: '{query}'")
+    logger.info(f"TOOL: Executing DuckDuckGo search for: '{query}'")
     try:
         with DDGS() as ddgs:
             results = list(ddgs.text(query, max_results=max_results))
             if not results:
+                logger.warning(f"DuckDuckGo search returned no results for: '{query}'")
                 return []
+            logger.debug(f"DuckDuckGo search returned {len(results)} results for: '{query}'")
             return [
                 SearchResult(
                     title=r.get("title", "No Title"),
@@ -122,7 +127,7 @@ def duckduckgo_search(query: str,
                 ) for r in results
             ]
     except Exception as e:
-        print(f"  ERROR in DuckDuckGo search: {e}")
+        logger.error(f"DuckDuckGo search failed: {e}", exc_info=True)
         return []
 
 
@@ -134,7 +139,7 @@ def scrape_and_summarize_web_page(url: str,
     Use this when a URL from a previous search (e.g., DuckDuckGo) seems highly 
     relevant and needs deeper inspection than its snippet provides.
     """
-    print(f"TOOL: Executing Web Scraper and Summarizer for URL: '{url}' regarding query: '{original_query}'")
+    logger.info(f"TOOL: Executing Web Scraper and Summarizer for URL: '{url}' regarding query: '{original_query}'")
     try:
         headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'}
         response = requests.get(url, headers=headers, timeout=10)
@@ -146,7 +151,7 @@ def scrape_and_summarize_web_page(url: str,
         text_content = "\n".join([p.get_text() for p in paragraphs])
 
         if not text_content.strip():
-            print("  INFO: No meaningful text content found on page.")
+            logger.warning(f"No meaningful text content found on page: {url}")
             return [SearchResult(title=f"Content Scraped from {url}",
                                  url=url,
                                  snippet="No meaningful text content found on the page.",
@@ -155,6 +160,7 @@ def scrape_and_summarize_web_page(url: str,
         # Limit text content to avoid excessive token usage for summarization
         max_chars_for_summary = 8000  # Roughly 2k tokens
         text_content_for_summary = text_content[:max_chars_for_summary]
+        logger.debug(f"Extracted {len(text_content)} characters from {url}, using {len(text_content_for_summary)} for summary")
 
         # Use OpenAI to summarize the text in context of the original query
         scraper_messages = [
@@ -179,6 +185,7 @@ def scrape_and_summarize_web_page(url: str,
         summary = summary_response.choices[0].message.content
 
         page_title = soup.find('title').string if soup.find('title') else url
+        logger.debug(f"Web scraping and summarization completed for {url}")
         return [
             SearchResult(
                 title=page_title.strip(),
@@ -188,13 +195,13 @@ def scrape_and_summarize_web_page(url: str,
             )
         ]
     except requests.RequestException as e:
-        print(f"  ERROR in WebScraper (request failed for {url}): {e}")
+        logger.error(f"WebScraper request failed for {url}: {e}")
         return [SearchResult(title=f"Failed to fetch {url}",
                              url=url,
                              snippet=f"Error during web request: {e}",
                              source_name="WebScraper")]
     except Exception as e:
-        print(f"  ERROR in WebScraper (general error for {url}): {e}")
+        logger.error(f"WebScraper general error for {url}: {e}", exc_info=True)
         return [SearchResult(title=f"Error processing {url}",
                              url=url,
                              snippet=f"An unexpected error occurred: {e}",
@@ -211,9 +218,9 @@ def tavily_search(query: str,
     Tavily can provide high-quality, relevant, and detailed results.
     Set search_depth to "advanced" for more comprehensive results if basic is not enough.
     """
-    print(f"TOOL: Executing Tavily search for: '{query}' with depth '{search_depth}'")
+    logger.info(f"TOOL: Executing Tavily search for: '{query}' with depth '{search_depth}'")
     if not TAVILY_API_KEY:
-        print("  ERROR: Tavily API key not found or not configured.")
+        logger.error("Tavily API key not found or not configured")
         return [SearchResult(title="Tavily API Key Error",
                              url="",
                              snippet="Tavily API key is not configured. Search cannot be performed.",
@@ -221,6 +228,8 @@ def tavily_search(query: str,
     try:
         tavily_client = TavilyClient(api_key=TAVILY_API_KEY)
         response = tavily_client.search(query=query, search_depth=search_depth, max_results=max_results)
+        results = response.get("results", [])
+        logger.debug(f"Tavily search returned {len(results)} results for: '{query}'")
         return [
             SearchResult(
                 title=r.get("title", "No Title"),
@@ -229,10 +238,10 @@ def tavily_search(query: str,
                               r.get("raw_content",
                                     "No Snippet"))[:500],
                 source_name="Tavily"
-            ) for r in response.get("results", [])
+            ) for r in results
         ]
     except Exception as e:
-        print(f"  ERROR in Tavily search: {e}")
+        logger.error(f"Tavily search failed: {e}", exc_info=True)
         return []
 
 

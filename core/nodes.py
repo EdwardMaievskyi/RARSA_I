@@ -1,24 +1,25 @@
 import json
+import logging
 from pydantic import ValidationError
 from core.state_models import AgentState, SearchResult, ResearchSummary
 from openai import OpenAI
 from config import OPENAI_API_KEY, PRIMARY_MODEL_NAME
 from core.tools import available_tools_map, openai_tools_schemas
 
-
+logger = logging.getLogger(__name__)
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
 
 
 def call_model(state: AgentState) -> AgentState:
     """The 'thinking' node. Decides whether to use a tool or finish by calling ResearchSummary."""
-    print("\n## NODE: call_model")
+    logger.info("NODE: call_model - Starting model call")
     messages = state['messages']
 
     if state['current_iteration'] >= state['max_iterations']:
-        print("  INFO: Maximum iterations reached. Forcing finish.")
+        logger.warning("Maximum iterations reached. Forcing finish.")
         pass
 
-    print(f"  Sending {len(messages)} messages to LLM. Current iteration: {state['current_iteration'] + 1}/{state['max_iterations']}")
+    logger.info(f"Sending {len(messages)} messages to LLM. Current iteration: {state['current_iteration'] + 1}/{state['max_iterations']}")
 
     response = openai_client.chat.completions.create(
         model=PRIMARY_MODEL_NAME,
@@ -29,11 +30,12 @@ def call_model(state: AgentState) -> AgentState:
     response_message = response.choices[0].message
 
     if response_message.content:
-        print(f"  LLM Response Content: {response_message.content[:300]}...")
+        logger.debug(f"LLM Response Content: {response_message.content[:300]}...")
     if response_message.tool_calls:
-        print(f"  LLM Tool Calls: {[tc.function.name for tc in response_message.tool_calls]}")
+        tool_names = [tc.function.name for tc in response_message.tool_calls]
+        logger.info(f"LLM Tool Calls: {tool_names}")
         for tc in response_message.tool_calls:
-            print(f"    - Tool: {tc.function.name}, Args: {tc.function.arguments}")
+            logger.debug(f"Tool: {tc.function.name}, Args: {tc.function.arguments}")
 
     return {"messages": messages + [response_message],
             "current_iteration": state["current_iteration"] + 1}
@@ -41,12 +43,12 @@ def call_model(state: AgentState) -> AgentState:
 
 def call_tool(state: AgentState) -> AgentState:
     """The 'acting' node. Executes the tool chosen by the model."""
-    print("\n## NODE: call_tool")
+    logger.info("NODE: call_tool - Starting tool execution")
     last_message = state['messages'][-1]
     tool_messages_to_append = []
 
     if not last_message.tool_calls:
-        print("  WARNING: call_tool was called, but the last message had no tool_calls.")
+        logger.warning("call_tool was called, but the last message had no tool_calls.")
         error_msg = {"role": "user",
                      "content": "Error: No tool was called. Please try again, ensuring you select a tool or use ResearchSummary."}
         return {"messages": state['messages'] + [error_msg]}
@@ -54,7 +56,7 @@ def call_tool(state: AgentState) -> AgentState:
     for tool_call in last_message.tool_calls:
         tool_name = tool_call.function.name
         tool_args_str = tool_call.function.arguments
-        print(f"  EXECUTING: '{tool_name}' with args: {tool_args_str}")
+        logger.info(f"EXECUTING: '{tool_name}' with args: {tool_args_str}")
 
         selected_tool_function = available_tools_map.get(tool_name)
 
@@ -76,20 +78,24 @@ def call_tool(state: AgentState) -> AgentState:
                     "name": tool_name,
                     "content": json.dumps(tool_output_serializable),
                 })
+                logger.debug(f"Tool {tool_name} executed successfully, returned {len(tool_output)} results")
             except json.JSONDecodeError as e:
                 error_message = f"Error decoding JSON arguments for tool {tool_name}: {e}. Arguments received: '{tool_args_str}'"
-                print(f"  ERROR: {error_message}")
+                logger.error(error_message)
                 tool_messages_to_append.append({"tool_call_id": tool_call.id,
                                                 "role": "tool",
                                                 "name": tool_name,
                                                 "content": json.dumps([{"error": error_message}])})
             except ValidationError as e:
                 error_message = f"Argument validation error for tool {tool_name}: {e}"
-                print(f"  ERROR: {error_message}")
-                tool_messages_to_append.append({"tool_call_id": tool_call.id, "role": "tool", "name": tool_name, "content": json.dumps([{"error": error_message}])})
+                logger.error(error_message)
+                tool_messages_to_append.append({"tool_call_id": tool_call.id,
+                                                "role": "tool",
+                                                "name": tool_name,
+                                                "content": json.dumps([{"error": error_message}])})
             except Exception as e:
                 error_message = f"Error executing tool {tool_name}: {e}"
-                print(f"  ERROR: {error_message}")
+                logger.error(error_message, exc_info=True)
                 tool_messages_to_append.append({"tool_call_id": tool_call.id,
                                                 "role": "tool",
                                                 "name": tool_name,
@@ -97,7 +103,7 @@ def call_tool(state: AgentState) -> AgentState:
         else:
             not_found_msg = \
                 f"Tool '{tool_name}' not found in available_tools_map."
-            print(f"  ERROR: {not_found_msg}")
+            logger.error(not_found_msg)
             tool_messages_to_append.append({"tool_call_id": tool_call.id,
                                             "role": "tool",
                                             "name": tool_name,
@@ -109,12 +115,12 @@ def call_tool(state: AgentState) -> AgentState:
 def prepare_final_answer_node(state: AgentState) -> AgentState:
     """Extracts arguments from the ResearchSummary tool call 
     and populates final_answer."""
-    print("\n## NODE: prepare_final_answer_node")
+    logger.info("NODE: prepare_final_answer_node - Preparing final answer")
     ai_message = state['messages'][-1]
     research_summary_call = next((tc for tc in ai_message.tool_calls if tc.function.name == "ResearchSummary"), None)
 
     if not research_summary_call:
-        print("  ERROR: prepare_final_answer_node called without ResearchSummary tool_call. Forcing generic no info.")
+        logger.error("prepare_final_answer_node called without ResearchSummary tool_call. Forcing generic no info.")
         return {
             "final_answer": ResearchSummary(
                 summary="Error: Agent attempted to finalize without proper ResearchSummary call.",
@@ -131,23 +137,20 @@ def prepare_final_answer_node(state: AgentState) -> AgentState:
             try:
                 parsed_sources.append(SearchResult.model_validate(s_data))
             except ValidationError as e:
-                print(f"  WARNING: Could not validate source data: {s_data}. Error: {e}")
+                logger.warning(f"Could not validate source data: {s_data}. Error: {e}")
                 parsed_sources.append(SearchResult(title="Invalid Source Data",
                                                    url="", snippet=str(s_data),
                                                    source_name="Error"))
 
         final_data = ResearchSummary(summary=summary_text,
                                      sources=parsed_sources)
-        print(f"""  FINAL ANSWER PREPARED: {final_data.summary[:100]}... 
-              ({len(final_data.sources)} sources)""")
+        logger.info(f"FINAL ANSWER PREPARED: {final_data.summary[:100]}... ({len(final_data.sources)} sources)")
         return {"final_answer": final_data}
     except Exception as e:
-        print(f"""  ERROR in prepare_final_answer_node: {e}. 
-              Raw args: {research_summary_call.function.arguments}""")
+        logger.error(f"Error in prepare_final_answer_node: {e}. Raw args: {research_summary_call.function.arguments}", exc_info=True)
         return {
              "final_answer": ResearchSummary(
-                summary=f"""Error processing final answer: {e}. 
-                The web search might not have yielded information.""",
+                summary=f"Error processing final answer: {e}. The web search might not have yielded information.",
                 sources=[])
         }
 
@@ -155,19 +158,14 @@ def prepare_final_answer_node(state: AgentState) -> AgentState:
 def force_no_info_finish_node(state: AgentState,
                               reason: str = "LLM did not call ResearchSummary as instructed or max iterations reached."):
     """Provides a fallback final answer when the agent doesn't finish correctly or hits limits."""
-    print(f"\n## NODE: force_no_info_finish_node. Reason: {reason}")
+    logger.warning(f"NODE: force_no_info_finish_node. Reason: {reason}")
     last_message_content = state['messages'][-1].get('content', '') if state['messages'] else ''
     if last_message_content and not state['messages'][-1].get('tool_calls'):
-        summary_text = f"""The agent provided a direct textual response 
-        instead of using the ResearchSummary function: '{last_message_content}'. 
-        No verifiable sources were cited through the structured process."""
+        summary_text = f"The agent provided a direct textual response instead of using the ResearchSummary function: '{last_message_content}'. No verifiable sources were cited through the structured process."
     elif "max iterations reached" in reason.lower():
-        summary_text = """The research process was terminated due to 
-        reaching the maximum iteration limit. The web search may not 
-        have yielded a conclusive answer within the allowed steps."""
+        summary_text = "The research process was terminated due to reaching the maximum iteration limit. The web search may not have yielded a conclusive answer within the allowed steps."
     else:
-        summary_text = """The web search did not give information to 
-        answer the initial query, or the agent workflow concluded unexpectedly."""
+        summary_text = "The web search did not give information to answer the initial query, or the agent workflow concluded unexpectedly."
 
     return {
         "final_answer": ResearchSummary(
@@ -179,20 +177,20 @@ def force_no_info_finish_node(state: AgentState,
 
 def should_continue(state: AgentState) -> str:
     """Router: Decides the next step."""
-    print("\n## ROUTER: should_continue")
+    logger.debug("ROUTER: should_continue - Determining next step")
     last_message = state['messages'][-1]
 
     if state["current_iteration"] >= state["max_iterations"]:
-        print(f"  --> Conclusion: Max iterations ({state['max_iterations']}) reached. Forcing finish.")
+        logger.warning(f"Max iterations ({state['max_iterations']}) reached. Forcing finish.")
         return "force_finish_due_to_iterations"
 
     if last_message.tool_calls:
         if any(tc.function.name == "ResearchSummary" for tc in last_message.tool_calls):
-            print("  --> Conclusion: 'ResearchSummary' tool called. Preparing final answer.")
+            logger.info("'ResearchSummary' tool called. Preparing final answer.")
             return "prepare_final_answer"
         else:
-            print("  --> Conclusion: Other tool call(s) detected. Continuing to 'action'.")
+            logger.debug("Other tool call(s) detected. Continuing to 'action'.")
             return "continue_with_tool"
     else:
-        print("  --> Conclusion: No tool calls from LLM. LLM might not have followed instructions to call ResearchSummary. Forcing finish.")
+        logger.warning("No tool calls from LLM. LLM might not have followed instructions to call ResearchSummary. Forcing finish.")
         return "force_finish_no_tool_call"

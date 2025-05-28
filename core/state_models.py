@@ -19,7 +19,7 @@ class ResearchSummary(BaseModel):
 class AgentState(TypedDict):
     """Represents the state of our search agent."""
     query: str
-    messages: List[Dict[str, Any]]  # Using dicts for OpenAI messages
+    messages: List[Dict[str, Any]]
     final_answer: Annotated[Optional[ResearchSummary], "The final summary and sources."]
     max_iterations: int
     current_iteration: int
