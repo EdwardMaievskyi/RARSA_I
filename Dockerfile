@@ -1,5 +1,9 @@
 FROM python:3.11-slim
 
+# Create a non-root user and group
+RUN groupadd --gid 1000 appuser && \
+    useradd --uid 1000 --gid 1000 --create-home --shell /bin/bash appuser
+
 # Set working directory
 WORKDIR /app
 
@@ -17,8 +21,12 @@ RUN pip install --upgrade pip
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# Copy application code and change ownership to appuser
 COPY . .
+RUN chown -R appuser:appuser /app
+
+# Switch to non-root user
+USER appuser
 
 # Set environment variables
 ENV GRADIO_ANALYTICS_ENABLED=False
