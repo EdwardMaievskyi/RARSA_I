@@ -1,7 +1,7 @@
 from langgraph.graph import StateGraph, START, END
-from nodes import call_model, call_tool, prepare_final_answer_node, \
+from core.nodes import call_model, call_tool, prepare_final_answer_node, \
     force_no_info_finish_node, should_continue
-from state_models import AgentState
+from core.state_models import AgentState
 
 
 workflow = StateGraph(AgentState)

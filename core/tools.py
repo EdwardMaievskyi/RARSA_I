@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 import wikipedia
 from duckduckgo_search import DDGS
 from tavily import TavilyClient
-from state_models import SearchResult, ResearchSummary
+from core.state_models import SearchResult, ResearchSummary
 import requests
 from bs4 import BeautifulSoup
 from config import OPENAI_API_KEY, PRIMARY_MODEL_NAME, TAVILY_API_KEY

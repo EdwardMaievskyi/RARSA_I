@@ -1,9 +1,9 @@
 import json
 from pydantic import ValidationError
-from state_models import AgentState, SearchResult, ResearchSummary
+from core.state_models import AgentState, SearchResult, ResearchSummary
 from openai import OpenAI
 from config import OPENAI_API_KEY, PRIMARY_MODEL_NAME
-from tools import available_tools_map, openai_tools_schemas
+from core.tools import available_tools_map, openai_tools_schemas
 
 
 openai_client = OpenAI(api_key=OPENAI_API_KEY)
