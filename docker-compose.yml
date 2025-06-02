@@ -4,6 +4,7 @@ services:
   research-agent:
     build: .
     container_name: ai-research-agent
+    privileged: false
     ports:
       - "127.0.0.1:7860:7860"
     environment:
@@ -19,15 +20,17 @@ services:
       - research-network
     tmpfs:
       - /tmp
-      - /app/.gradio  # Gradio temp directory
+      - /app/.gradio
     dns:
       - 8.8.8.8
       - 8.8.4.4
       - 1.1.1.1
+    security_opt:
+      - no-new-privileges:true
 
 networks:
   research-network:
     driver: bridge
-    internal: false  # Allow external connections
+    internal: false
     driver_opts:
       com.docker.network.bridge.enable_ip_masquerade: "true" 
