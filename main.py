@@ -5,7 +5,7 @@ from dotenv import load_dotenv
 # Load environment variables should be done before other imports
 load_dotenv()
 
-from ui.gradio_interface import create_gradio_interface
+from web_ui.gradio_interface import create_gradio_interface
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
