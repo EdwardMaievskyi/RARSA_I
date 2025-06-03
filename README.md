@@ -1,5 +1,5 @@
 **RARSA-I**
-("ReAct Reasoning Search Agent I") is an AI-powered research agent designed to automate and streamline research tasks using large language models (LLMs), advanced search, and workflow automation. It provides a modular architecture to run research pipelines, interact with search APIs, and expose a user-friendly interface via Gradio.
+("ReAct Reasoning Search Agent I") is an AI-powered research agent designed to automate and streamline data collection and summarization tasks using large AI models, advanced search, and workflow automation. It provides a modular architecture for running research pipelines, interacting with search APIs, and exposing a user-friendly interface via Gradio.
 
 ---
 
