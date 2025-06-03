@@ -15,7 +15,7 @@
 
 ## Agent Workflow Visualization
 
-![Agent Workflow Visualization](ReAct_Reasoning_Search_Agent_Graph.png)
+![Agent Workflow Visualization](readme_imgs/ReAct_Reasoning_Search_Agent_Graph.png)
 
 ---
 
@@ -45,14 +45,18 @@
 │   ├── state_models.py
 │   ├── tools.py
 ├── ui/                   # Gradio interface implementation (see `ui/gradio_interface.py`)
-├── main.py               # Main entry point, launches the Gradio server
+├── readme_imgs/          # Images for the README.md
+├── .cursorignore         # Cursor ignore file
+├── .env.example          # Example environment variable file
 ├── config.py             # Loads environment variables and model/API keys
 ├── requirements.txt      # Python package dependencies
 ├── Dockerfile            # Container build instructions
 ├── docker-compose.yml    # Multi-container orchestration for local use
-├── .env.example          # Example environment variable file
-├── run.sh                # Shell script to run the app
-└── LICENSE
+├── LICENSE               # Project license
+├── main.py               # Main entry point, launches the Gradio server
+├── README.md
+├── requirements.txt      # Python package dependencies
+└── run.sh                # Shell script to run the app
 ```
 
 ---
@@ -129,8 +133,9 @@ All configuration is managed via environment variables. Use the `.env.example` a
 ## Usage
 
 - Access the Gradio UI at the configured host/port.
-- Interact with the research agent by entering your research queries.
-- The agent will use LLMs and web search to automate multi-step research tasks.
+- Interact with the research agent by entering your research query.
+![Gradio Research AgentUI](readme_imgs/UI_screenshot_rarsa1.jpg)
+- The agent empowered by web search, Wikipedia querying, and web scraping tools will automate multi-step research tasks.
 
 ---
 
