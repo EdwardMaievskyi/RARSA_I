@@ -1,11 +1,11 @@
 **RARSA-I**
-("ReAct Reasoning Search Agent I") is an AI-powered research agent designed to automate and streamline data collection and summarization tasks using large AI models, advanced search, and workflow automation. It provides a modular architecture for running research pipelines, interacting with search APIs, and exposing a user-friendly interface via Gradio.
+("ReAct Reasoning Search Agent I") is an AI-powered research agent designed to automate and streamline data collection and summarization tasks using the o4-mini model provided by OpenAI, advanced search, and workflow automation. It provides a modular architecture for running research pipelines, interacting with search APIs, and exposing a user-friendly interface via Gradio.
 
 ---
 
 ## Features
 
-- **LLM-powered Research Workflows:** Modular graph-based system for chaining LLM-driven research steps.
+- **LLM-powered Research Workflows:** Modular graph-based system for chaining AI-model-driven research steps.
 - **Extensible Toolsets:** Integrates with APIs such as OpenAI, DuckDuckGo, Wikipedia, and Tavily for web search, data retrieval, and analysis.
 - **Gradio Web UI:** Simple web interface for users to interact with the research agent.
 - **Dockerized Deployment:** Easily run locally or in containers with provided Docker/Docker Compose files.
