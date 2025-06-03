@@ -18,6 +18,9 @@
 ![Agent Workflow Visualization](readme_imgs/ReAct_Reasoning_Search_Agent_Graph.png)
 
 ---
+## Demo
+
+[![Demo RARSA-I](https://img.youtube.com/vi/z19W2n3YoUw/hqdefault.jpg)](https://youtu.be/z19W2n3YoUw)
 
 ## Table of Contents
 
