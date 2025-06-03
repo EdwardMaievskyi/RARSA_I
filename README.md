@@ -13,6 +13,12 @@
 
 ---
 
+## Agent Workflow Visualization
+
+![Agent Workflow Visualization](ReAct_Reasoning_Search_Agent_Graph.png)
+
+---
+
 ## Table of Contents
 
 - [Project Structure](#project-structure)
