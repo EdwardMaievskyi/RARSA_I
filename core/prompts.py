@@ -25,4 +25,10 @@ IMPORTANT:
 - Your response should ALWAYS be a call to one of the available tools or the `ResearchSummary` function. Do not provide a direct textual answer to the user.
 - Ensure that the `snippet` in the `sources` list for `ResearchSummary` accurately reflects the information used from that source.
 - Manage your research iterations. If you are not making progress after a few attempts, conclude your research.
+- After gathering information, you MUST call the ResearchSummary tool to compile your findings. Do not provide a direct response.
 """
+
+SCRAPER_SYSTEM_PROMPT = """You are an expert at extracting and summarizing web 
+page content based on a user's research query. Focus only on information 
+directly relevant to the query. If no relevant information is found, state 
+that clearly. Provide a concise snippet (around 3-5 sentences)."""

@@ -1,5 +1,5 @@
 **RARSA-I**
-("ReAct Reasoning Search Agent I") is an AI-powered research agent designed to automate and streamline data collection and summarization tasks using the o4-mini model provided by OpenAI, advanced search, and workflow automation. It provides a modular architecture for running research pipelines, interacting with search APIs, and exposing a user-friendly interface via Gradio.
+("ReAct Reasoning Search Agent I") is an AI-powered research agent designed to automate and streamline data collection and summarization tasks allowing usage of various AI-model providers (OpenAI, Anthropic, Google/VertexAI, Together AI), advanced search, and workflow automation. It provides a modular architecture for running research pipelines, interacting with search APIs, and exposing a user-friendly interface via Gradio.
 
 ---
 
@@ -108,6 +108,7 @@
 
    The Gradio interface will be available at [http://127.0.0.1:7860](http://127.0.0.1:7860) by default.
 
+
 ### Docker Deployment
 
 1. **Ensure your `.env` file is ready.**
@@ -147,12 +148,16 @@ All configuration is managed via environment variables. Use the `.env.example` a
 RARSA-I requires valid API keys for external LLM and search engines:
 
 - **OpenAI:** Obtain from https://platform.openai.com/account/api-keys
+- **Anthropic API** Obtain from https://docs.anthropic.com/en/api/overview
+- **VertexAI API** Obtain from https://console.cloud.google.com/vertex-ai/
+- **TogetherAI API** Obtain from https://www.together.ai/
 - **Tavily:** Obtain from https://app.tavily.com/
 
 Set these keys in your `.env` file:
 ```dotenv
 OPENAI_API_KEY=your_openai_key
 TAVILY_API_KEY=your_tavily_key
+...
 ```
 
 ---
@@ -186,6 +191,9 @@ This project is licensed under the terms of the [LICENSE](LICENSE) file.
 - [Wikipedia API](https://github.com/goldsmith/Wikipedia)
 - [Gradio Documentation](https://www.gradio.app/)
 - [OpenAI API](https://platform.openai.com/)
+- [Anthropic API](https://docs.anthropic.com/en/api/overview)
+- [Google (Vertex AI API - Gemini)](https://console.cloud.google.com/vertex-ai/)
+- [TogetherAI](https://www.together.ai/)
 - [Tavily API](https://app.tavily.com/)
 - [Docker](https://www.docker.com/)
 - [Docker Compose](https://docs.docker.com/compose/)
