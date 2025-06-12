@@ -36,34 +36,6 @@
 
 ---
 
-## Project Structure
-
-```
-.
-├── core/                 # Core logic for graph, nodes, tools, agent, prompts, and state models
-│   ├── graph_builder.py
-│   ├── nodes.py
-│   ├── prompts.py
-│   ├── research_agent.py
-│   ├── state_models.py
-│   ├── tools.py
-├── ui/                   # Gradio interface implementation (see `ui/gradio_interface.py`)
-├── readme_imgs/          # Images for the README.md
-├── .cursorignore         # Cursor ignore file
-├── .env.example          # Example environment variable file
-├── config.py             # Loads environment variables and model/API keys
-├── requirements.txt      # Python package dependencies
-├── Dockerfile            # Container build instructions
-├── docker-compose.yml    # Multi-container orchestration for local use
-├── LICENSE               # Project license
-├── main.py               # Main entry point, launches the Gradio server
-├── README.md
-├── requirements.txt      # Python package dependencies
-└── run.sh                # Shell script to run the app
-```
-
----
-
 ## Installation
 
 ### Prerequisites
