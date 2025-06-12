@@ -9,6 +9,7 @@ from langchain_anthropic import ChatAnthropic
 from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_together import ChatTogether
 from langchain_core.messages import AIMessage, SystemMessage
+from retry import retry
 
 from config import LLMConfig
 from core.prompts import MAIN_SYSTEM_PROMPT
@@ -24,7 +25,8 @@ logger = logging.getLogger(__name__)
 
 
 class ResponseMessage:
-    """Hybrid message class that supports both dictionary and attribute access."""
+    """Hybrid message class that supports both dictionary and attribute access.
+    """
     def __init__(self, role: str, content: str, tool_calls: List = None):
         self.role = role
         self.content = content
@@ -100,7 +102,8 @@ class AgentModelCaller:
             )
             self.gemini_model_armed = \
                 gemini_model.bind_tools(gemini_tools_schemas)
-        elif provider == "togetherai" and config.together_api_key:
+        elif config.together_api_key and \
+                config.preferred_ai_model_provider == "together":
             self.together_model_name = \
                 self.config.together_cost_saving_model_name
             together_model = ChatTogether(
@@ -115,55 +118,75 @@ class AgentModelCaller:
             raise ValueError(
                 "Incorrect model provider value or no API key provided. "
                 f"Provider: '{provider}'. "
-                "Supported providers: 'openai', 'anthropic', 'google'."
+                "Supported providers: 'openai', 'anthropic', 'google', "
+                "'together'."
             )
 
+    @retry(
+        exceptions=Exception,
+        tries=3,
+        delay=1,
+        backoff=2,
+        max_delay=10,
+        logger=logger
+    )
     def _call_openai(self, messages: List[Dict]):
         """Handles the API call to OpenAI."""
         self.logger.info(f"Calling OpenAI model: {self.openai_model_name}")
 
-        def openai_call():
-            response = self.openai_client.chat.completions.create(
-                model=self.openai_model_name,
-                messages=messages,
-                tools=openai_tools_schemas,
-                tool_choice="auto",
-            )
-            return response.choices[0].message
+        response = self.openai_client.chat.completions.create(
+            model=self.openai_model_name,
+            messages=messages,
+            tools=openai_tools_schemas,
+            tool_choice="auto",
+        )
+        return response.choices[0].message
 
-        return self._call_with_retry("OpenAI", openai_call)
-
+    @retry(
+        exceptions=Exception,
+        tries=3,
+        delay=1,
+        backoff=2,
+        max_delay=10,
+        logger=logger
+    )
     def _call_anthropic(self, messages: List[Dict]):
         """Handles the API call to Anthropic using LangChain."""
-        self.logger.info(f"Calling Anthropic model: {self.anthropic_model_name}")
+        self.logger.info(
+            f"Calling Anthropic model: {self.anthropic_model_name}"
+        )
         langchain_messages = self._convert_to_langchain_messages(messages)
+        return self.anthropic_model_armed.invoke(langchain_messages)
 
-        def anthropic_call():
-            return self.anthropic_model_armed.invoke(langchain_messages)
-
-        return self._call_with_retry("Anthropic", anthropic_call)
-
+    @retry(
+        exceptions=Exception,
+        tries=3,
+        delay=1,
+        backoff=2,
+        max_delay=10,
+        logger=logger
+    )
     def _call_google(self, messages: List[Dict]) -> AIMessage:
         """Handles the API call to Google using LangChain."""
         self.logger.info(f"Calling Google model: {self.gemini_model_name}")
         langchain_messages = self._convert_to_langchain_messages(messages)
+        return self.gemini_model_armed.invoke(langchain_messages)
 
-        def google_call():
-            return self.gemini_model_armed.invoke(langchain_messages)
-
-        return self._call_with_retry("Google", google_call)
-
-    def _call_togetherai(self, messages: List[Dict]) -> AIMessage:
+    @retry(
+        exceptions=Exception,
+        tries=3,
+        delay=1,
+        backoff=2,
+        max_delay=10,
+        logger=logger
+    )
+    def _call_together(self, messages: List[Dict]) -> AIMessage:
         """Handles the API call to Together.ai using LangChain."""
         self.logger.info(
             f"Calling Together.ai model: {self.together_model_name}"
         )
         langchain_messages = self._convert_to_langchain_messages(messages)
-
-        def togetherai_call():
-            return self.together_model_armed.invoke(langchain_messages)
-
-        return self._call_with_retry("Together.ai", togetherai_call)
+        return self.together_model_armed.invoke(langchain_messages)
 
     def _validate_tool_call(self, tc) -> bool:
         """Validates a tool call object has required fields."""
@@ -380,7 +403,7 @@ class AgentModelCaller:
         try:
             if provider == "openai":
                 response_message = self._call_openai(messages)
-            elif provider in ["anthropic", "google", "togetherai"]:
+            elif provider in ["anthropic", "google", "together"]:
                 response_obj = getattr(self, f"_call_{provider}")(messages)
                 response_message = self._adapt_model_output(response_obj)
             else:
