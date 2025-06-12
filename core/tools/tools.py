@@ -1,17 +1,24 @@
-from typing import Any, Dict, List
-from pydantic import BaseModel, Field
-import wikipedia
-from duckduckgo_search import DDGS
-from tavily import TavilyClient
-from core.state_models import SearchResult, ResearchSummary
-import requests
-from bs4 import BeautifulSoup
-from config import OPENAI_API_KEY, PRIMARY_MODEL_NAME, TAVILY_API_KEY
-from openai import OpenAI
 import logging
+from typing import Any, Dict, List
+import json
+
+import requests
+import wikipedia
+from bs4 import BeautifulSoup
+from duckduckgo_search import DDGS
+from pydantic import BaseModel, Field
+from tavily import TavilyClient
+
+from config import TAVILY_API_KEY, LLMConfig
+from core.model_callers.scrapper_model_caller import ScrapperModelCaller
+from core.prompts import SCRAPER_SYSTEM_PROMPT
+from core.state_models import SearchResult
+
 
 logger = logging.getLogger(__name__)
-openai_client = OpenAI(api_key=OPENAI_API_KEY)
+
+llm_config = LLMConfig()
+llm_scraper = ScrapperModelCaller(llm_config)
 
 
 def pydantic_to_openai_tool(pydantic_model: BaseModel,
@@ -40,18 +47,19 @@ def wikipedia_search(query: str,
     """
     Searches Wikipedia for the given query and returns a summary.
     Use this first for factual, encyclopedic queries.
+
+    Args:
+        query: The search query for Wikipedia.
+        max_sentences: The maximum number of sentences for the Wikipedia summary.
+
+    Returns:
+        A list of SearchResult objects.
     """
     logger.info(f"TOOL: Executing Wikipedia search for: '{query}'")
     try:
-        # Set a user-agent
         wikipedia.set_user_agent("MyResearchAgent/1.0 (myemail@example.com)")
-        page = wikipedia.page(query,
-                              auto_suggest=False,
-                              redirect=True)
-        summary = wikipedia.summary(query,
-                                    sentences=max_sentences,
-                                    auto_suggest=False,
-                                    redirect=True)
+        page = wikipedia.page(query, auto_suggest=True)
+        summary = wikipedia.summary(query, sentences=max_sentences, auto_suggest=True)
         logger.debug(f"Wikipedia search successful for '{query}', page title: {page.title}")
         return [
             SearchResult(
@@ -72,25 +80,19 @@ def wikipedia_search(query: str,
         if e.options:
             # Try searching for the first option as a fallback
             try:
-                first_option = e.options[0]
-                page = wikipedia.page(first_option,
-                                      auto_suggest=False,
-                                      redirect=True)
-                summary = wikipedia.summary(first_option,
-                                            sentences=max_sentences,
-                                            auto_suggest=False,
-                                            redirect=True)
-                logger.debug(f"Wikipedia disambiguation fallback successful for '{first_option}'")
+                summary = wikipedia.summary(e.options[0], sentences=max_sentences)
+                page = wikipedia.page(e.options[0])
+                logger.debug(f"Wikipedia disambiguation fallback successful for '{e.options[0]}'")
                 return [
                     SearchResult(
                         title=page.title,
                         url=page.url,
-                        snippet=f"Disambiguation for '{query}'. Showing results for '{first_option}': {summary}",
+                        snippet=f"Disambiguation for '{query}'. Showing results for '{e.options[0]}': {summary}",
                         source_name="Wikipedia"
                     )
                 ]
             except Exception as e_inner:
-                logger.error(f"Wikipedia disambiguation fallback failed for '{first_option}': {e_inner}")
+                logger.error(f"Wikipedia disambiguation fallback failed for '{e.options[0]}': {e_inner}")
                 return [SearchResult(title=f"Disambiguation error for '{query}'",
                                      url="",
                                      snippet=f"Wikipedia search for '{query}' led to a disambiguation page. Example options: {', '.join(e.options[:3]) if e.options else 'None'}.", source_name="Wikipedia")]
@@ -99,7 +101,7 @@ def wikipedia_search(query: str,
                              snippet=f"Wikipedia search for '{query}' led to a disambiguation page.",
                              source_name="Wikipedia")]
     except Exception as e:
-        logger.error(f"Wikipedia search failed: {e}", exc_info=True)
+        logger.error(f"Wikipedia search failed: {e}")
         return []
 
 
@@ -109,6 +111,13 @@ def duckduckgo_search(query: str,
     Searches the web using DuckDuckGo for the given query.
     Use this for general web searches if Wikipedia is not sufficient or appropriate.
     It's fast and provides a good starting point for research.
+
+    Args:
+        query: The search query for DuckDuckGo.
+        max_results: The maximum number of search results to return.
+
+    Returns:
+        A list of SearchResult objects.
     """
     logger.info(f"TOOL: Executing DuckDuckGo search for: '{query}'")
     try:
@@ -138,6 +147,13 @@ def scrape_and_summarize_web_page(url: str,
     content in the context of the original_query and returns a concise summary.
     Use this when a URL from a previous search (e.g., DuckDuckGo) seems highly 
     relevant and needs deeper inspection than its snippet provides.
+
+    Args:
+        url: The URL of the web page to scrape and summarize.
+        original_query: The original user research query to provide context for summarization.
+
+    Returns:
+        A list of SearchResult objects.
     """
     logger.info(f"TOOL: Executing Web Scraper and Summarizer for URL: '{url}' regarding query: '{original_query}'")
     try:
@@ -158,17 +174,15 @@ def scrape_and_summarize_web_page(url: str,
                                  source_name="WebScraper")]
 
         # Limit text content to avoid excessive token usage for summarization
-        max_chars_for_summary = 8000  # Roughly 2k tokens
+        max_chars_for_summary = 10000  # Roughly 2k tokens
         text_content_for_summary = text_content[:max_chars_for_summary]
-        logger.debug(f"Extracted {len(text_content)} characters from {url}, using {len(text_content_for_summary)} for summary")
+        logger.debug(f"Extracted {len(text_content)} characters from " +
+                     f"{url}, using {len(text_content_for_summary)} " +
+                     "for summary")
 
-        # Use OpenAI to summarize the text in context of the original query
         scraper_messages = [
             {"role": "system",
-             "content": """You are an expert at extracting and summarizing web page 
-             content based on a user's research query. Focus only on information directly 
-             relevant to the query. If no relevant information is found, state that clearly. 
-             Provide a concise snippet (around 3-5 sentences)."""},
+             "content": SCRAPER_SYSTEM_PROMPT},
             {"role": "user",
              "content": f"""Original Research Query: '{original_query}'\n\n
              Web Page Content (first {max_chars_for_summary} characters):\n```\n
@@ -178,11 +192,9 @@ def scrape_and_summarize_web_page(url: str,
              the page content does not seem relevant to the query, output 
              'The page content does not appear to be relevant to the query.'"""}
         ]
-        summary_response = openai_client.chat.completions.create(
-            model=PRIMARY_MODEL_NAME,
-            messages=scraper_messages
-        )
-        summary = summary_response.choices[0].message.content
+
+        # summary = summary_response.choices[0].message.content
+        summary = llm_scraper.call_model_with_scraper(scraper_messages)
 
         page_title = soup.find('title').string if soup.find('title') else url
         logger.debug(f"Web scraping and summarization completed for {url}")
@@ -217,6 +229,14 @@ def tavily_search(query: str,
     do not yield enough information or when you need a quick summarized answer with sources.
     Tavily can provide high-quality, relevant, and detailed results.
     Set search_depth to "advanced" for more comprehensive results if basic is not enough.
+
+    Args:
+        query: The search query for Tavily.
+        search_depth: The search depth for Tavily ('basic' or 'advanced').
+        max_results: The maximum number of search results.
+
+    Returns:
+        A list of SearchResult objects.
     """
     logger.info(f"TOOL: Executing Tavily search for: '{query}' with depth '{search_depth}'")
     if not TAVILY_API_KEY:
@@ -276,22 +296,3 @@ class TavilySearchArgs(BaseModel):
                               description="Search depth for Tavily ('basic' or 'advanced').")
     max_results: int = Field(default=3,
                              description="Maximum number of search results.")
-
-
-openai_tools_schemas = [
-    pydantic_to_openai_tool(WikipediaSearchArgs,
-                            "wikipedia_search",
-                            wikipedia_search.__doc__),
-    pydantic_to_openai_tool(DuckDuckGoSearchArgs,
-                            "duckduckgo_search",
-                            duckduckgo_search.__doc__),
-    pydantic_to_openai_tool(ScrapeArgs,
-                            "scrape_and_summarize_web_page",
-                            scrape_and_summarize_web_page.__doc__),
-    pydantic_to_openai_tool(TavilySearchArgs,
-                            "tavily_search",
-                            tavily_search.__doc__),
-    pydantic_to_openai_tool(ResearchSummary,
-                            "ResearchSummary",
-                            "Use this function to provide the final research summary and its sources, or to indicate that no information was found."),
-]
