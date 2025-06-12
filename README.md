@@ -24,7 +24,6 @@
 
 ## Table of Contents
 
-- [Project Structure](#project-structure)
 - [Installation](#installation)
 - [Configuration](#configuration)
 - [Usage](#usage)
