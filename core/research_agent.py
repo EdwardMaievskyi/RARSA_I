@@ -18,7 +18,8 @@ class ResearchAgent:
     def process_query(
             self,
             query: str,
-            progress_callback: Optional[Callable[[str], None]] = None) -> Dict[str, Any]:
+            progress_callback: Optional[Callable[[str], None]] = None
+            ) -> Dict[str, Any]:
         """Process a research query and return results."""
         logger.debug("process_query called with query length: " +
                      f"{len(query) if query else 0}")

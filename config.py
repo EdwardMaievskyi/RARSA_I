@@ -57,5 +57,20 @@ class LLMConfig:
         Literal["openai",
                 "anthropic",
                 "google",
-                "togetherai"] = PREFERRED_AI_MODEL_PROVIDER
+                "together"] = PREFERRED_AI_MODEL_PROVIDER
     max_retry_attempts: int = MAX_RETRY_ATTEMPTS
+
+
+DEFAULT_MODEL_CONFIG = {
+    "temperature": 0.4,
+    "max_tokens": 8192
+}
+
+MAX_CHARS_FOR_SUMMARY = 10000
+DEFAULT_MAX_RESULTS = 3
+DEFAULT_MAX_SENTENCES = 5
+USER_AGENT = (
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) '
+    'AppleWebKit/537.36 (KHTML, like Gecko) '
+    'Chrome/91.0.4472.124 Safari/537.36'
+)
